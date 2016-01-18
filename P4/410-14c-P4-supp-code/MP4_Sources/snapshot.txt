@@ -1,0 +1,25 @@
+šsp = <2098096>
+done
+DONE
+CREATING THREAD 2...esp = <2099144>
+done
+DONE
+CREATING THREAD 3...esp = <2100192>
+done
+DONE
+DONE
+CREATING THREAD 4...esp = <2101240>
+done
+DONE
+add a thread to ready queue
+add a thread to ready queue
+add a thread to ready queue
+STARTING THREAD 1 ...
+QQQQQQQQQQQQQQQQQQQQQThread: 0
+FUN 1 INVOKED!
+FUN 1 IN BURST[0]
+FUN 1: TICK [0]
+
+ROUND ROBIN SWITCH
+resume a thread onto ready queue
+

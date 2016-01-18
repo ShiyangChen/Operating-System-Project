@@ -1,0 +1,25 @@
+FUN 1: TICK [6]
+FUN 1: TICK [7]
+FUN 1: TICK [8]
+FUN 1: TICK [9]
+FUN 2 IN ITERATION[16]
+-------------------------------
+|  Reading a block from disk  |
+-------------------------------
+---------------------------------------
+|      Exercise the file system       |
+---------------------------------------
+Write onto disk:
+the quick brown fox jumps over the lazy dog.
+                             r the lazy dog.
+
+Write onto disk:
+the lazy dog wakes up and gets really angry.
+
+Read from the disk:
+the quick brown fox jumps over the lazy dog.
+the lazy dog wakes up and gets really angry.
+
+Write onto disk:
+what an interesting story!
+

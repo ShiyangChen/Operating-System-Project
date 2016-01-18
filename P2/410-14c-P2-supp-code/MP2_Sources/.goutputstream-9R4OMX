@@ -1,0 +1,53 @@
+#include "page_table.H"
+#include "Console.H"
+PageTable * PageTable::current_page_table; //initialization for these static variable
+unsigned int PageTable::paging_enabled;     /* is paging turned on (i.e. are addresses logical)? */
+FramePool * PageTable::kernel_mem_pool;    /* Frame pool for the kernel memory */
+FramePool * PageTable::process_mem_pool;   /* Frame pool for the process memory */
+unsigned long PageTable::shared_size;        /* size of shared address space */
+
+
+void PageTable::init_paging(FramePool * _kernel_mem_pool,FramePool * _process_mem_pool,const unsigned long _shared_size)
+{
+	kernel_mem_pool=_kernel_mem_pool;
+	process_mem_pool=_process_mem_pool;
+	shared_size=_shared_size;
+	Console::puts("init_paging hello ");
+}
+PageTable::PageTable()
+{
+	page_directory=(unsigned long *)(kernel_mem_pool->get_frame()*4096);
+	*page_directory=kernel_mem_pool->get_frame()*4096 | 3;  //*page_directory means 1st PDE
+	unsigned long * first_pagetable_addr=(unsigned long *) *page_directory;
+	for(unsigned long i=0;i<=1023;i++)//start fill in every entries of the first page table
+		*(first_pagetable_addr+i)=i*4096 | 3; //3=011 in binary, 011 is a flag,now every entry stores a 32bit value, computer now treat this value as an long integer
+	
+	for(unsigned long i=0;i<=1023;i++)
+		*(page_directory+i)=0;  //set other 1023 entries of page directory as "not present in memory" 
+	Console::puts("PageTable Hello ");
+}
+
+void PageTable::load()
+{
+	write_cr3((unsigned long)page_directory);  
+}
+void PageTable::enable_paging()
+{
+	write_cr0(read_cr0() | 0x80000000);
+	Console::puts("enable_paging Hello ");
+}
+
+void PageTable::handle_fault(REGS * _r)
+{
+	unsigned long virtualaddr=read_cr2();
+	if((_r->err_code & 1)==0)  //check if the requested page is in memory or not
+	{
+		unsigned long pdindex=virtualaddr>>22;           //we need first 10bit 
+		unsigned long * pd=(unsigned long *)read_cr3(); //get physical memory address of page directory
+		*(pd+pdindex)=kernel_mem_pool->get_frame()*4096 | 3; //request frame address for storing page table,
+															//by calling kernel_mem_pool, we assume pagetable for a process reside in kernel memory
+		unsigned long ptindex=virtualaddr>>12 & 0x03FF;   //we need next 10bit in the middle
+		unsigned long * pt=(unsigned long *)pd[pdindex]; //pd[pdindex] equals *(pd+pdindex),just to save efforts
+		*(pt+ptindex)=process_mem_pool->get_frame()*4096 | 3; //request frame address for storing the page
+	}
+}

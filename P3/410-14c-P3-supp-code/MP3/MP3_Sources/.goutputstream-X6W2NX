@@ -1,0 +1,192 @@
+#include "vm_pool.H"
+#include "Console.H"
+#include "page_table.H"
+//#include "stdlib.h"
+Regions::Regions(unsigned long _startaddr,unsigned long _number_bytes)
+{
+	startaddr=_startaddr;    //startaddr is in bytes
+	number_bytes=_number_bytes;
+	number_pages=number_bytes/4096+1;
+	lastRegion=NULL;
+	nextRegion=NULL;
+
+}
+VMPool::VMPool(unsigned long _base_address, unsigned long _size, FramePool *_frame_pool, PageTable *_page_table)
+{
+	base_address=_base_address;
+	size=_size;
+	frame_pool=_frame_pool;
+	page_table=_page_table;
+	pt_firstRegion=NULL;
+	total_pages=size/4096+1;
+	//Console::puts("New VMPool created!\n");
+	page_table->register_vmpool(this); //
+	//Console::puts("New VMPool created!\n");
+	//current_pool=this;
+	indicator=new bool[total_pages];
+	//indicator=(bool *)malloc(sizeof(bool)*total_pages);
+	Console::puts("New VMPool created!\n");
+	for (int i=0;i<=total_pages-1;i++)
+		indicator[i]=0;  //'0' means the page is free and available, '1' means the page has been allocated thus unavailable
+	//Console::puts("New VMPool created!\n");
+}
+VMPool::VMPool()
+{
+}
+
+unsigned long VMPool::allocate(unsigned long _size)   //_size is number of bytes, not number of pages
+{
+	unsigned long pages_needed=_size/4096+1;
+	unsigned long fpindex,lpindex; //fpindex=the index of the page where the first free byte reside in, it is not the first free page though
+	unsigned long counter=0;
+	if(pt_firstRegion==NULL) //no region has been alliocated, a special case for initialization
+	{
+		pt_firstRegion=new Regions(base_address,_size);
+		for (int i=0;i<=pages_needed-1;i++)
+			indicator[i]=1;
+		return base_address;
+	}
+	if(_size<=(pt_firstRegion->startaddr)-base_address+1)  //First-Fit
+	{	
+		fpindex=0;
+		lpindex=(pt_firstRegion->startaddr-1-base_address)/4096;
+		for (int i=fpindex;i<=lpindex;i++)
+			if(!indicator[i])
+				counter=counter+1;   //compute total number of free pages 
+		if(counter>=pages_needed)
+		{
+			Regions * p=pt_firstRegion;
+			pt_firstRegion=new Regions(base_address,_size);
+			pt_firstRegion->nextRegion=p;
+			p->lastRegion=pt_firstRegion;
+			for (int i=0;i<=pages_needed-1;i++)
+				indicator[i]=1;
+			return base_address;
+		}
+	}
+	Regions * z=pt_firstRegion;  //if two conditions above are not satisfied, then jump over intervals between allocated regions
+	while(z->nextRegion!=NULL)
+	{
+		counter=0;
+		//unsigned long intervals=(z->nextRegion)->startaddr-(z->startaddr)-(z->number_bytes);
+		fpindex=(z->startaddr+z->number_bytes-base_address)/4096;
+		lpindex=((z->nextRegion)->startaddr-1-base_address)/4096;
+		for (int i=fpindex;i<=lpindex;i++)
+			if(!indicator[i])
+				counter=counter+1;   //compute total number of free pages
+		if(counter>=pages_needed)
+		{
+			if(indicator[fpindex])  //this is the most case
+			{
+				for(int i=fpindex+1;i<=fpindex+pages_needed;i++)
+					indicator[i]=1;
+				Regions * r=new Regions((fpindex+1)*4096+base_address,_size);
+				r->nextRegion=z->nextRegion;   //insert new region into two existing regions, so regions are ordered by their startaddr
+				(z->nextRegion)->lastRegion=r;
+				z->nextRegion=r;
+				r->lastRegion=z;
+				return base_address+(fpindex+1)*4096;
+			}
+			else
+			{
+				for(int i=fpindex;i<=fpindex+pages_needed-1;i++)
+					indicator[i]=1;
+				Regions * r=new Regions(fpindex*4096+base_address,_size);
+				r->nextRegion=z->nextRegion;
+				(z->nextRegion)->lastRegion=r;
+				z->nextRegion=r;
+				r->lastRegion=z;
+				return base_address+fpindex*4096;
+			}
+		}
+		else   //the current interval cannot fulfill the need, we jump to next interval
+			z=z->nextRegion;
+
+	}
+	counter=0;
+	fpindex=(z->startaddr+z->number_bytes-base_address)/4096;	//now z points to the last allocated region
+	lpindex=(size-1)/4096;
+	for (int i=fpindex;i<=lpindex;i++)
+			if(!indicator[i])
+				counter=counter+1;
+	if(counter>=pages_needed)
+	{
+		if(indicator[fpindex])  //this is the most case
+		{
+			for(int i=fpindex+1;i<=fpindex+pages_needed;i++)
+				indicator[i]=1;
+			Regions * r=new Regions((fpindex+1)*4096+base_address,_size);  
+			z->nextRegion=r;      //put the new region at the end of the linkedlist
+			r->lastRegion=z;
+			return base_address+(fpindex+1)*4096;
+		}
+		else
+		{
+			for(int i=fpindex;i<=fpindex+pages_needed-1;i++)
+				indicator[i]=1;
+			Regions * r=new Regions(fpindex*4096+base_address,_size);
+			z->nextRegion=r;
+			r->lastRegion=z;
+			return base_address+fpindex*4096;
+		}
+	}
+	else //at this point no interval between regions or the first or last free space can meet the demand, so return 0
+		return 0;
+}
+
+void VMPool::release(unsigned long _start_address)
+{
+	unsigned long fpindex; //means the page index in which _address reside in
+	unsigned long page_number; // actual page number in whole virtual memory
+	Regions * z=pt_firstRegion;
+	if (z==NULL)
+		Console::puts("no region has been allocated, thus cannot released \n");
+	while(z->nextRegion!=NULL)
+		if(z->startaddr==_start_address)
+		{
+			fpindex=(z->startaddr-base_address)/4096;
+			for(int i=fpindex;i<=fpindex+z->number_pages-1;i++)
+			{
+				indicator[i]=0;
+				page_number=fpindex+base_address/4096;
+				page_table->free_page(page_number);
+			}
+			(z->nextRegion)->lastRegion=z->lastRegion;
+			(z->lastRegion)->nextRegion=z->nextRegion;
+			delete z;
+			return;   
+		}
+		else
+			z=z->nextRegion;
+	/*at this moment, z points to the last region*/
+	if(z->startaddr==_start_address)
+	{
+		fpindex=(z->startaddr-base_address)/4096;
+		for(int i=fpindex;i<=fpindex+z->number_pages-1;i++)
+		{
+			indicator[i]=0;
+			page_number=fpindex+base_address/4096;
+			page_table->free_page(page_number);
+		}
+		(z->lastRegion)->nextRegion=NULL;
+		delete z;
+		return;
+	}
+	else  //if the last region doesn't match
+		Console::puts("no such a region with a start_address you specified \n");
+}
+
+
+BOOLEAN VMPool::is_legitimate(unsigned long _address)
+{
+	if(_address<base_address || _address>base_address+size-1)
+		return 0;
+	else 
+	{
+		int i=(_address-base_address)/4096;  //compute the index of the corresponding page
+		if(indicator[i])   //has been allocated thus reference to it is valid
+			return 1;
+		else
+			return 0;
+	}
+}

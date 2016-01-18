@@ -1,0 +1,51 @@
+#include "frame_pool.H"
+#include "Console.H"
+bool FramePool::indicator[8*1024];  //initialization for static variable
+//for (unsigned long i=0;i<=511;i++)
+	//indicator[i]=0;
+//for (unsigned long i=512;i<=8*1024-1;i++) //cannot use those statement to initialize static variable,I still need to figure it out
+	//int FramePool::indicator[i]=1;
+
+FramePool::FramePool(unsigned long _base_frame_no,unsigned long _nframes,unsigned long _info_frame_no)
+{
+	startframe_no=_base_frame_no;
+	frame_no=_nframes;
+	infoframe_no=_info_frame_no;
+	//for(unsigned long i=startframe_no;i<=startframe+frame_no-1;i++)
+		//indicator[i]=1;//1 means the current frame is allocatable. Let's assume all frames are allocatable at the beginning
+	if(infoframe_no!=0) 
+		indicator[infoframe_no]=0; //this frame have been assigned for management info,so it becomes unallocatable
+	else
+		indicator[startframe_no]=0;  //if _info_frame_no=0, then we simply use first frame to store managment info
+}
+
+unsigned long FramePool::get_frame()
+{
+	unsigned long i;	
+	for(i=startframe_no;i<=startframe_no+frame_no-1;i++)
+		if(indicator[i])//let's simply find first frame that is allocatable
+		{
+			indicator[i]=0;
+			return i;
+		}
+	return 0;   //if all frames have been allocated, return 0
+}
+
+void FramePool::mark_inaccessible(unsigned long _base_frame_no,unsigned long _nframes)
+{
+	for(unsigned long i=_base_frame_no;i<=_base_frame_no+_nframes-1;i++)
+		indicator[i]=0;
+}
+
+void FramePool::release_frame(unsigned long frame_index)
+{
+	indicator[frame_index]=1;
+}
+
+void FramePool::frame_init()
+{
+	for (unsigned long i=0;i<=511;i++)
+		indicator[i]=0;
+	for (unsigned long i=512;i<=8*1024-1;i++)
+		indicator[i]=1;
+}
