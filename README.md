@@ -1,5 +1,5 @@
 # Operating-System-Projects
-This project consists of five machine problems(MP).
+This project consists of five machine problems(MP). 
 MP1: 
 An easy machine problem just to test development environment. A simple “kernel” is provided to print a welcome text and goes into an infinite loop. Just modify the text on the welcome message to print out your name.
 
